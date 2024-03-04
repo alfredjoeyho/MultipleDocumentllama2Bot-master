@@ -2,7 +2,7 @@ import streamlit as st
 from streamlit_chat import message
 from langchain.chains import ConversationalRetrievalChain
 from langchain.embeddings import HuggingFaceEmbeddings
-from langchain.llms import CTransformers, Replicate
+from langchain.llms import Replicate
 from langchain.text_splitter import CharacterTextSplitter
 from langchain.vectorstores import FAISS
 from langchain.memory import ConversationBufferMemory
@@ -54,17 +54,39 @@ def display_chat_history(chain):
 def create_conversational_chain(vector_store):
     load_dotenv()
     # Replace with your actual LLM and configurations
-    llm = Replicate(
-        streaming=True,
-        model="your-replicate-model-key",
-        callbacks=[StreamingStdOutCallbackHandler()],
-        input={"temperature": 0.01, "max_length": 500, "top_p": 1})
-    memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
+    # llm = Replicate(
+    #     streaming=True,
+    #     model="your-replicate-model-key",
+    #     callbacks=[StreamingStdOutCallbackHandler()],
+    #     input={"temperature": 0.01, "max_length": 500, "top_p": 1})
+    # memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
 
+    llm = Replicate(
+    streaming=True,
+    model="replicate/llama-2-70b-chat:58d078176e02c219e11eb4da5a02a7830a283b14cf8f94537af893ccff5ee781",
+    callbacks=[StreamingStdOutCallbackHandler()],
+    input={"temperature": 0.01, "max_length": 500, "top_p": 1}
+)
+    memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
     chain = ConversationalRetrievalChain.from_llm(llm=llm, chain_type='stuff',
                                                   retriever=vector_store.as_retriever(search_kwargs={"k": 2}),
                                                   memory=memory)
     return chain
+
+# # Define your LLM here (Replicate, CTransformers, etc.)
+#       llm = Replicate(
+#       streaming=True,
+#       model="replicate/your-model-key-here",  # Make sure to replace this with your actual model key
+#       callbacks=[StreamingStdOutCallbackHandler()],
+#       input={"temperature": 0.01, "max_length": 500, "top_p": 1})
+
+#   # Define memory here
+#   memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
+
+#   chain = ConversationalRetrievalChain.from_llm(llm=llm, chain_type='stuff',
+#                                                 retriever=vector_store.as_retriever(search_kwargs={"k": 2}),
+#                                                 memory=memory)
+#   return chain
 
 def main():
     initialize_session_state()
