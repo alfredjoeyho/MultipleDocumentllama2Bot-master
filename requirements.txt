@@ -14,3 +14,4 @@ replicate
 docx2txt
 
 langchain-community
+fastapi
