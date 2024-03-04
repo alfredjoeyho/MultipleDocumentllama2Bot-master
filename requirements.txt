@@ -15,3 +15,5 @@ docx2txt
 
 langchain-community
 fastapi
+uvicorn
+flask

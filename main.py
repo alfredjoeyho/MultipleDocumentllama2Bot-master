@@ -1,135 +1,97 @@
-import streamlit as st
-from streamlit_chat import message
+from fastapi import FastAPI
 from langchain.chains import ConversationalRetrievalChain
 from langchain.embeddings import HuggingFaceEmbeddings
 from langchain.llms import Replicate
 from langchain.text_splitter import CharacterTextSplitter
 from langchain.vectorstores import FAISS
 from langchain.memory import ConversationBufferMemory
-from langchain.document_loaders import PyPDFLoader, TextLoader, Docx2txtLoader
 from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
-import os
 from dotenv import load_dotenv
-import tempfile
+from flask import session
 
 load_dotenv()
 
 def initialize_session_state():
-    if 'history' not in st.session_state:
-        st.session_state['history'] = []
+  # create a session object  
 
-    if 'generated' not in st.session_state:
-        st.session_state['generated'] = ["Hello! Ask me anything about 🤗"]
+  if 'history' not in session:
+     session['history'] = []
 
-    if 'past' not in st.session_state:
-        st.session_state['past'] = ["Hey! 👋"]
+  if 'generated' not in session:
+     session['generated'] = ["Hello! Ask me anything about"]
+
+  if 'past' not in session:
+      session['past'] = ["Hey!"]
 
 def conversation_chat(query, chain, history):
-    result = chain({"question": query, "chat_history": history})
-    history.append((query, result["answer"]))
-    return result["answer"]
+  result = chain({"question": query, "chat_history": history})
+  history.append((query, result["answer"]))
+  return result["answer"]
 
-def display_chat_history(chain):
-    reply_container = st.container()
-    container = st.container()
-
-    with container:
-        with st.form(key='my_form', clear_on_submit=True):
-            user_input = st.text_input("Question:", placeholder="Ask about your Documents", key='input')
-            submit_button = st.form_submit_button(label='Send')
-
-        if submit_button and user_input:
-            with st.spinner('Generating response...'):
-                output = conversation_chat(user_input, chain, st.session_state['history'])
-
-            st.session_state['past'].append(user_input)
-            st.session_state['generated'].append(output)
-
-    if st.session_state['generated']:
-        with reply_container:
-            for i in range(len(st.session_state['generated'])):
-                message(st.session_state["past"][i], is_user=True, key=str(i) + '_user')
-                message(st.session_state["generated"][i], key=str(i))
 
 def create_conversational_chain(vector_store):
     load_dotenv()
-    # Replace with your actual LLM and configurations
-    # llm = Replicate(
-    #     streaming=True,
-    #     model="your-replicate-model-key",
-    #     callbacks=[StreamingStdOutCallbackHandler()],
-    #     input={"temperature": 0.01, "max_length": 500, "top_p": 1})
-    # memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
-
     llm = Replicate(
     streaming=True,
     model="replicate/llama-2-70b-chat:58d078176e02c219e11eb4da5a02a7830a283b14cf8f94537af893ccff5ee781",
     callbacks=[StreamingStdOutCallbackHandler()],
-    input={"temperature": 0.01, "max_length": 500, "top_p": 1}
-)
+    input={"temperature": 0.01, "max_length": 500, "top_p": 1})
     memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
     chain = ConversationalRetrievalChain.from_llm(llm=llm, chain_type='stuff',
                                                   retriever=vector_store.as_retriever(search_kwargs={"k": 2}),
                                                   memory=memory)
     return chain
 
-# # Define your LLM here (Replicate, CTransformers, etc.)
-#       llm = Replicate(
-#       streaming=True,
-#       model="replicate/your-model-key-here",  # Make sure to replace this with your actual model key
-#       callbacks=[StreamingStdOutCallbackHandler()],
-#       input={"temperature": 0.01, "max_length": 500, "top_p": 1})
+app = FastAPI()
 
-#   # Define memory here
-#   memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
+def display_chat_history(chain, prompt):
+  # reply_container = st.container()
+  # container = st.container()
 
-#   chain = ConversationalRetrievalChain.from_llm(llm=llm, chain_type='stuff',
-#                                                 retriever=vector_store.as_retriever(search_kwargs={"k": 2}),
-#                                                 memory=memory)
-#   return chain
+  # with container:
+  #     with st.form(key='my_form', clear_on_submit=True):
+  #         user_input = st.text_input("Question:", placeholder="Ask about your Documents", key='input')
+  #         submit_button = st.form_submit_button(label='Send')
 
-def main():
-    initialize_session_state()
-    st.title("Multi-Docs ChatBot using llama2 :books:")
-    st.sidebar.title("Document Processing")
-    uploaded_files = st.sidebar.file_uploader("Upload files", accept_multiple_files=True)
+      # if submit_button and user_input:
+          # with st.spinner('Generating response...'):
+              output = conversation_chat(prompt, chain, session['history'])
+              session['past'].append(prompt)
+              session['generated'].append(output)
+  
+# if session['generated']:
+#       with reply_container:
+#           for i in range(len(st.session_state['generated'])):
+#               message(st.session_state["past"][i], is_user=True, key=str(i) + '_user')
+#               message(st.session_state["generated"][i], key=str(i))
 
-    if uploaded_files:
-        text = []
-        for file in uploaded_files:
-            file_extension = os.path.splitext(file.name)[1]
-            with tempfile.NamedTemporaryFile(delete=False) as temp_file:
-                temp_file.write(file.read())
-                temp_file_path = temp_file.name
+@app.get("/")
+async def read_root():
+    return {"Hello": "World"}
+  
+@app.get("/items/{item_id}")
+async def read_item(item_id: str):
+  # Open the file and read its content
+  with open('AIRole_Pharmacy.txt', 'r') as file:
+      content = file.read()
+  # Print the content of the file
+  print(content)
 
-            if file_extension == ".pdf":
-                loader = PyPDFLoader(temp_file_path)
-            elif file_extension in [".docx", ".doc"]:
-                loader = Docx2txtLoader(temp_file_path)
-            elif file_extension == ".txt":
-                loader = TextLoader(temp_file_path)
-            else:
-                loader = None
+  prompt = item_id
+  initialize_session_state()
 
-            if loader:
-                text.extend(loader.load())
-                os.remove(temp_file_path)
+  text = []
 
-        if text:
-            text_splitter = CharacterTextSplitter(separator="\n", chunk_size=1000, chunk_overlap=100, length_function=len)
-            text_chunks = text_splitter.split_documents(text)
+  text_splitter = CharacterTextSplitter(separator="\n", chunk_size=1000, chunk_overlap=100, length_function=len)
+  text_chunks = text_splitter.split_documents(text)
+  embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2", model_kwargs={'device': 'cpu'})
+  vector_store = FAISS.from_documents(text_chunks, embedding=embeddings)
+  chain = create_conversational_chain(vector_store)
+  display_chat_history(chain, prompt)
+  
+  return {content}
 
-            if text_chunks:
-                embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2", model_kwargs={'device': 'cpu'})
-                vector_store = FAISS.from_documents(text_chunks, embedding=embeddings)
-                chain = create_conversational_chain(vector_store)
-                display_chat_history(chain)
-            else:
-                st.warning("No text chunks generated from documents.")
-        else:
-            st.warning("No text extracted from uploaded files.")
-    else:
-        st.info("Upload documents to start.")
 
-if __name__ == "__main__":
-    main()
+# @app.get("/items/{item")
+# def read_item(item_id: int, q: Union[str, None] = None):
+#     return {"item_id": item_id, "q": q}
